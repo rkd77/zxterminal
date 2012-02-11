@@ -3,12 +3,12 @@ ZX Terminal
 
 ZX Terminal is a terminal emulator for ZX Spectrum and Timex 2048
 with the spectranet. There are two parts: Spectrum and Unix(Linux).
-The Linux part requires libvtern (tested with 0.99.7), ncurses (5.9)
+The Linux part requires libvterm (tested with 0.99.7), ncurses (5.9)
 and glib2. The Spectrum part requires z88dk and the socklib from the spectranet.
 
 There are 4 variants of the terminal:
 - 85x24 for Timex hires (tmx85.c and timex.c)
-- 64x24 for Timex hires (tmx64,c and timex.c)
+- 64x24 for Timex hires (tmx64.c and timex.c)
 - 64x24 color for ZX Spectrum (spc64_c.c and spectrum_c.c)
 - 64x24 mono for ZX Spectrum (spc64_m.c and spectrum_m.c)
 
