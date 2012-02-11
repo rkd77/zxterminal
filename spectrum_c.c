@@ -188,13 +188,11 @@ main()
 		}
 		key[0] = ch;
 
-		if (key[0]) {
-			rc = send(connfd, key, 1, 0);
-			if (rc < 0) {
-				printk("send failed!\n");
-				sockclose(connfd);
-				break;
-			}
+		rc = send(connfd, key, 1, 0);
+		if (rc < 0) {
+			printk("send failed!\n");
+			sockclose(connfd);
+			break;
 		}
 	}
 
