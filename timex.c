@@ -111,7 +111,7 @@ main()
 	char *display1 = (char *)16384;
 	char *display2 = (char *)24576;
 	char *display = display1;
-	char key[1], ch = ' ', prev_ch = ' ';
+	char key[1], ch;
 	int pos = 0, to_read = 1024, remaining;
 	struct pollfd p;	/* the poll information structure */
 
@@ -193,6 +193,9 @@ main()
 			}
 			remaining = 6144 - pos;
 			to_read = remaining > 1024 ? 1024 : remaining;
+		}
+		if (rc & POLLHUP) {
+			break;
 		}
 		ch = getSingleKeypress();
 		if (ch == 0) {

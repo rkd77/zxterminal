@@ -108,7 +108,7 @@ main()
 	int sockfd, connfd, rc;
 	struct sockaddr_in my_addr;
 	char *display = (char *)16384;
-	char key[1], ch = ' ', prev_ch = ' ';
+	char key[1], ch;
 	int pos = 0, to_read = 1024, remaining;
 	struct pollfd p;	/* the poll information structure */
 
@@ -181,6 +181,9 @@ main()
 			}
 			remaining = 6912 - pos;
 			to_read = remaining > 1024 ? 1024 : remaining;
+		}
+		if (rc & POLLHUP) {
+			break;
 		}
 		ch = getSingleKeypress();
 		if (ch == 0) {

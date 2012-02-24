@@ -106,7 +106,6 @@ waddch(WINDOW *win, const chtype a)
 		for (i = 0; i < 8; i++) {
 			display[pos] = (display[pos] & 240) | ((z[i] & 240) >> 4);
 			display[atry] = attrib;
-			//fprintf(stderr, "atry = %d\n", atry);
 			atry += 32;
 			pos += 256;
 		}
@@ -225,7 +224,6 @@ pair_content(short pair, short *f, short *b)
 {
 	*f = col[pair].fg;
 	*b = col[pair].bg;
-	fprintf(stderr, "pair = %d f = %d b = %d\n", pair, *f, *b);
 	return 0;
 }
 
