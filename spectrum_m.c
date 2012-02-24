@@ -33,7 +33,10 @@ getSingleKeypress()
 		di
 #endasm
 		k = *(kbuf + readoffset);
-		readoffset = bufoffset;
+		++readoffset;
+		if (readoffset == KBUFSZ)
+			readoffset = 0;
+
 #asm
 		ei
 #endasm
