@@ -304,7 +304,6 @@ int main(int argc, char **argv)
 	init_acs();
 	init_keyboard();
 	locale=setlocale(LC_ALL,"C");
-	term_win._use_keypad = TRUE;
 
 	/* create the terminal and have it run bash */
 	vterm = vterm_create(MAX_X, MAX_Y, VTERM_FLAG_VT100);
@@ -321,7 +320,7 @@ int main(int argc, char **argv)
 		struct pollfd fd_array;
 		int count, retval;
 		int bytes = vterm_read_pipe(vterm);
-		char key;
+		unsigned char key;
 
 		if (bytes > 0) {
 			vterm_wnd_update(vterm);

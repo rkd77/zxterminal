@@ -359,7 +359,7 @@ int main(int argc, char **argv)
 		struct pollfd fd_array;
 		int count, retval;
 		int bytes = vterm_read_pipe(vterm);
-		char key;
+		unsigned char key;
 
 		if (bytes > 0) {
 			vterm_wnd_update(vterm);
