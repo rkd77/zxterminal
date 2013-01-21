@@ -115,10 +115,10 @@ main()
 	int pos = 0, to_read = 1024, remaining;
 	struct pollfd p;	/* the poll information structure */
 
-//#asm
-//	ld a,62
-//	out (255),a
-//#endasm
+#asm
+	ld a,62
+	out (255),a
+#endasm
 	/* 0x0C clears the screen in the z88dk default console driver */
 	putchar(0x0C);
 
