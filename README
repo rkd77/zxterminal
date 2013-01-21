@@ -6,13 +6,32 @@ with the spectranet. There are two parts: Spectrum and Unix(Linux).
 The Linux part requires libvterm (tested with 0.99.7), ncurses (5.9)
 and glib2. The Spectrum part requires z88dk and the socklib from the spectranet.
 
-There are 4 variants of the terminal:
-- 85x24 for Timex hires (tmx85.c and timex.c)
-- 64x24 for Timex hires (tmx64.c and timex.c)
-- 64x24 color for ZX Spectrum (spc64_c.c and spectrum_c.c)
-- 64x24 mono for ZX Spectrum (spc64_m.c and spectrum_m.c)
+There are 5 variants of the terminal:
+- 85x24 hires (timex.tap and tmx85)
+- 80x24 hires (timex.tap and tmx80)
+- 64x24 hires (timex.tap and tmx64)
+- 64x24 color for ZX Spectrum (spectrum_c.tap and spc64_c)
+- 64x24 mono for ZX Spectrum (spectrum_m.c and spc64_m)
 
-Build, type make.
-And load the spectrum part on the spectrum, and run the Linux part.
-For example:
+To build, type make.
+
+Load the appriopriate tape file on the Spectrum.
+The Spectrum will listen on port 2000 for incoming connection.
+Then run Unix part. The parameter is the IP address of the Spectrum.
+
+On Timex:
+LOAD "timex.tap"
+On Unix:
 ./tmx85 127.0.0.2
+
+I tested elinks, mc and bb.
+mc need some tweaking (Learn keys).
+Remember that CTRL-I is the TAB.
+
+In fact, the zxterminal is not real terminal emulator.
+Better name for it would be the framebuffer. In the infinite loop
+Spectrum sends info about keypresses to remote machine.
+In the same time the Unix part, one of (tmx85, tmx80, tmx64, spc64_c spc64_m)
+builds Spectrum screen and sends it to the Spectrum.
+
+The code is based on StreamingVideo example from Spectranet. At least the idea.
