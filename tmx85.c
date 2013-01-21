@@ -48,7 +48,10 @@ static unsigned int to_refresh = 1;
 static guint32 keyboard_map[256];
 chtype acs_map[128];
 
+#ifndef MAX_X
 #define MAX_X 85
+#endif
+
 #define MAX_Y 24
 
 bool
@@ -415,7 +418,7 @@ main(int argc, char **argv)
 
 	locale=setlocale(LC_ALL,"C");
 	/* create the terminal and have it run bash */
-	vterm = vterm_create(85, 24, VTERM_FLAG_VT100);
+	vterm = vterm_create(MAX_X, 24, VTERM_FLAG_VT100);
 	vterm_set_colors(vterm, COLOR_WHITE, COLOR_BLACK);
 	vterm_wnd_set(vterm, &term_win);
 
