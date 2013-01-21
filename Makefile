@@ -4,7 +4,7 @@ tmx85: tmx85.c
 	gcc -o tmx85 -DMAX_X=85 -I/usr/include/ncurses -lvterm -lpthread  `pkg-config --cflags --libs glib-2.0` tmx85.c -ggdb3
 
 tmx80: tmx85.c
-	gcc -o tmx85 -DMAX_X=80 -I/usr/include/ncurses -lvterm -lpthread  `pkg-config --cflags --libs glib-2.0` tmx85.c -ggdb3
+	gcc -o tmx80 -DMAX_X=80 -I/usr/include/ncurses -lvterm -lpthread  `pkg-config --cflags --libs glib-2.0` tmx85.c -ggdb3
 
 tmx64: tmx64.c
 	gcc -o tmx64 -I/usr/include/ncurses -lvterm -lpthread `pkg-config --cflags --libs glib-2.0` tmx64.c -ggdb3
