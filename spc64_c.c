@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 /*
-This code is based on the vshell.c from the libvterm library
+This library is based on the vshell.c from the libvterm library
 */
 
 #include <stdio.h>
@@ -32,20 +32,25 @@ This code is based on the vshell.c from the libvterm library
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
+#include <time.h>
 
 #include <vterm.h>
 
 #include <curses.h>
 
 static unsigned char display[6912];
+static unsigned char display2[6912];
+
+static unsigned char bufor[6912 * 3];
 static unsigned char font[2048];
 
-static WINDOW term_win;
-static int to_refresh = 1;
+static unsigned char *changes;
 
-chtype acs_map[128];
+static WINDOW term_win;
+static unsigned int to_refresh = 1;
 
 static guint32 keyboard_map[256];
+chtype acs_map[128];
 
 struct colors {
 	short fg, bg;
@@ -80,18 +85,24 @@ waddch(WINDOW *win, const chtype a)
 	short f, b;
 	short pair;
 	attr_t attr;
+	int which;
 
-	if (win->_attrs & A_REVERSE) {
-		for (i = 0; i < 8; i++) {
+	if (win->_attrs & A_REVERSE)
+	{
+		for (i = 0; i < 8; i++)
+		{
 			z[i] = ~font[addres + i];
 		}
-	} else {
-		for (i = 0; i < 8; i++) {
+	}
+	else
+	{
+		for (i = 0; i < 8; i++)
+		{
 			z[i] = font[addres + i];
 		}
 	}
 
-	int which = (x & 1);
+	which = (x & 1);
 	x = (x / 2) & 31; 
 	pos = (x & 31) + ((y & 7) << 5) + ((y & 24) << 8);
 
@@ -102,15 +113,20 @@ waddch(WINDOW *win, const chtype a)
 	pair_content(pair, &f, &b);
 	attrib = color_map[f & 7] | (color_map[b & 7] << 3) | (bright << 6);
 
-	if (which) {
-		for (i = 0; i < 8; i++) {
+	if (which)
+	{
+		for (i = 0; i < 8; i++)
+		{
 			display[pos] = (display[pos] & 240) | ((z[i] & 240) >> 4);
 			display[atry] = attrib;
 			atry += 32;
 			pos += 256;
 		}
-	} else {
-		for (i = 0; i < 8; i++) {
+	}
+	else
+	{
+		for (i = 0; i < 8; i++)
+		{
 			display[pos] = (display[pos] & 15) | (z[i] & 240);
 			display[atry] = attrib;
 			pos += 256;
@@ -118,10 +134,12 @@ waddch(WINDOW *win, const chtype a)
 	}
 
 	++x1;
-	if (x1 >= MAX_X) {
+	if (x1 >= MAX_X)
+	{
 		x1 = 0;
 		++y;
-		if (y == MAX_Y) {
+		if (y == MAX_Y)
+		{
 			y = 0;
 		}
 	}
@@ -131,28 +149,134 @@ waddch(WINDOW *win, const chtype a)
 }
 
 static void
+init_colors(void)
+{
+	int i, j;
+
+	for (i = 0; i < 8; i++)
+	{
+		for (j = 0; j < 8; j++)
+		{
+			if (i != 7 || j != 0)
+			{
+				int ind = j * 8 + i;
+				col[ind].fg = i;
+				col[ind].bg = j;
+			}
+		}
+	}
+	col[0].fg = 7;
+	col[0].bg = 0;
+}
+
+int
+wchgat(WINDOW *win, int n, attr_t attr, short color, const void *opts)
+{
+	int atry = 6144 + win->_cury * 32 + (win->_curx >> 1);
+
+	display[atry] |= 128;
+	return 0;
+}
+
+int
+beep(void)
+{
+	//fprintf(stderr, "beep\n");
+	return 0;
+}
+
+int
+pair_content(short pair, short *f, short *b)
+{
+	*f = col[pair].fg;
+	*b = col[pair].bg;
+	return 0;
+}
+
+int COLOR_PAIRS = 64;
+
+int
+wmove(WINDOW *win, int y, int x)
+{
+	//fprintf(stderr, "wmove: y=%d, x=%d\n", y, x);
+	if (y >= 0 && y < MAX_Y)
+	{
+		win->_cury = y;
+	}
+	if (x >= 0 && x < MAX_X)
+	{
+		win->_curx = x;
+	}
+	return 0;
+}
+
+static void
+writescr(void)
+{
+	unsigned int i;
+
+	changes = bufor;
+	for (i = 0; i < 6912; ++i)
+	{
+		if (display2[i] != display[i])
+		{
+			*((unsigned short *)changes) = (unsigned short)(i + 16384);
+			changes += 2;
+			*((unsigned char *)changes) = display2[i] = display[i];
+			++changes;
+		}
+	}
+}
+
+static void *
+send_loop(void *arg)
+{
+	int sockfd = *(int *)arg;
+	static int counter;
+
+	while (TRUE)
+	{
+		if (to_refresh)
+		{
+			int pos, to_write;
+
+			to_refresh = 0;
+			writescr();
+
+			for (pos = 0, to_write = (unsigned char *)changes - bufor; to_write;)
+			{
+				int sent = write(sockfd, bufor + pos, to_write);
+
+				if (sent < 0)
+				{
+					fprintf(stderr, "sent = %d\n",sent);
+					break;
+				};
+				pos += sent;
+				to_write -= sent;
+			}
+		}
+		else
+		{
+			static struct timespec t = {
+				.tv_sec = 0,
+				.tv_nsec = 10000000
+			};
+			nanosleep(&t, NULL);
+		}
+	}
+}
+
+static void
 init_acs(void)
 {
 	int i;
 
-	for (i = 0; i < 128; i++) {
+	for (i = 0; i < 128; i++)
+	{
 		acs_map[i] = 32;
 	}
 
-/** Mapping from (enum ::border_char - 0xB0) to VT100 line-drawing
- * characters encoded in CP437.
- * When UTF-8 I/O is enabled, ELinks uses this array instead of
- * ::frame_vt100[], and converts the characters from CP437 to UTF-8.  */
-/*
-static const unsigned char frame_vt100_u[48] = {
-        177, 177, 177, 179, 180, 180, 180, 191,
-        191, 180, 179, 191, 217, 217, 217, 191,
-        192, 193, 194, 195, 196, 197, 195, 195,
-        192, 218, 193, 194, 195, 196, 197, 193,
-        193, 194, 194, 192, 192, 218, 218, 197,
-        197, 217, 218, 177,  32, 32,  32,  32
-};
-*/
 	acs_map['a'] = 177;
 	acs_map['x'] = 179;
 	acs_map['u'] = 180;
@@ -173,7 +297,8 @@ init_keyboard(void)
 {
 	guint32 i;
 
-	for (i = 0; i < 256; i++) {
+	for (i = 0; i < 256; i++)
+	{
 		keyboard_map[i] = i;
 	}
 
@@ -187,110 +312,8 @@ init_keyboard(void)
 	keyboard_map[130] = 9;
 }
 
-static void
-init_colors(void)
-{
-	int i, j;
-
-	for (i = 0; i < 8; i++) {
-		for (j = 0; j < 8; j++) {
-			if (i != 7 || j != 0) {
-				int ind = j * 8 + i;
-				col[ind].fg = i;
-				col[ind].bg = j;
-			}
-		}
-	}
-	col[0].fg = 7;
-	col[0].bg = 0;
-}
-
 int
-wchgat(WINDOW *win, int n, attr_t attr, short color, const void *opts)
-{
-	int atry = 6144 + win->_cury * 32 + (win->_curx >> 1);
-	display[atry] |= 128;
-	return 0;
-}
-
-int
-beep(void)
-{
-	return 0;
-}
-
-int
-pair_content(short pair, short *f, short *b)
-{
-	*f = col[pair].fg;
-	*b = col[pair].bg;
-	return 0;
-}
-
-int COLOR_PAIRS = 64;
-
-int
-wmove(WINDOW *win, int y, int x)
-{
-	if (y >= 0 && y < MAX_Y) {
-		win->_cury = y;
-	}
-	if (x >= 0 && x < MAX_X) {
-		win->_curx = x;
-	}
-	return 0;
-}
-
-static void *
-send_loop(void *arg)
-{
-	int sockfd = *(int *)arg;
-	int counter = 0;
-
-	while (TRUE) {
-		if (to_refresh) {
-			struct pollfd fd_array;
-			int pos, to_write;
-
-			fd_array.fd = sockfd;
-			fd_array.events = POLLOUT;
-
-			to_refresh = counter = 0;
-
-			for (pos = 0, to_write = 1024;;) {
-				int retval = poll(&fd_array, 1, 10);
-				int sent;
-				// no data or poll() error.
-				if (retval <= 0) {
-					continue;
-				}
-
-				sent = write(sockfd, display + pos, to_write);
-
-				if (sent < 0) {
-					continue;
-				};
-				pos += sent;
-				if (pos >= 6912) {
-					break;
-				}
-				to_write = (6912 - pos) > 1024 ? 1024 : (6912 - pos);
-			}
-		} else {
-			static struct timespec t = {
-				.tv_sec = 0,
-				.tv_nsec = 10000000
-			};
-			nanosleep(&t, NULL);
-			++counter;
-			if (counter == 20) {
-				to_refresh = 1;
-			}
-		}
-	}
-}
-
-int main(int argc, char **argv)
+main(int argc, char **argv)
 {
 	vterm_t *vterm;
 	int i, j, ch;
@@ -301,28 +324,33 @@ int main(int argc, char **argv)
 	struct hostent *he;
 	int sockfd, sent;
 	pthread_t fred;
+	unsigned char key;
 
-	if (argc < 2) {
+	if (argc < 2)
+	{
 		printf("Need a host as the arg\n");
 		exit(255);
 	}
 
 	he = gethostbyname(argv[1]);
-	if (!he) {
+	if (!he)
+	{
 		perror("gethostbyname");
 		exit(255);
 	}
 
 	stream = fopen("FONT4.BIN", "rb");
-	if (!stream) {
+	if (!stream)
+	{
 		perror("fopen");
 		exit(255);
 	}
-	fread(&font, 1, 2048, stream);
+	fread(font, 1, 2048, stream);
 	fclose(stream);
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
+	if (sockfd < 0)
+	{
 		perror("socket");
 		exit(255);
 	}
@@ -332,20 +360,22 @@ int main(int argc, char **argv)
 	remoteaddr.sin_family = AF_INET;
 	remoteaddr.sin_port = htons(2000);
 	memcpy(&(remoteaddr.sin_addr), he->h_addr, he->h_length);
-	if(connect(sockfd, (struct sockaddr *)&remoteaddr, sizeof(remoteaddr)) < 0) {
+	if (connect(sockfd, (struct sockaddr *)&remoteaddr, sizeof(remoteaddr)) < 0)
+	{
 		perror("connect");
 		exit(255);
 	}
 
-	fcntl(sockfd, F_SETFL, O_NONBLOCK);
+	//fcntl(sockfd, F_SETFL, O_NONBLOCK);
 	init_acs();
 	init_keyboard();
 	init_colors();
-	locale=setlocale(LC_ALL,"C");
+
+	locale = setlocale(LC_ALL,"C");
 	term_win._use_keypad = TRUE;
 
 	/* create the terminal and have it run bash */
-	vterm = vterm_create(MAX_X, MAX_Y, VTERM_FLAG_VT100);
+	vterm = vterm_create(MAX_X, 24, VTERM_FLAG_VT100);
 	vterm_set_colors(vterm, COLOR_WHITE, COLOR_BLACK);
 	vterm_wnd_set(vterm, &term_win);
 
@@ -355,15 +385,16 @@ int main(int argc, char **argv)
 
 	pthread_create(&fred, NULL, send_loop, &sockfd);
 
-	while (TRUE) {
+	while (TRUE)
+	{
 		struct pollfd fd_array;
 		int count, retval;
 		int bytes = vterm_read_pipe(vterm);
-		unsigned char key;
 
-		if (bytes > 0) {
+		if (bytes > 0)
+		{
 			vterm_wnd_update(vterm);
-			++to_refresh;
+			to_refresh = 1;
 		}
 		if (bytes == -1) break;
 
@@ -372,14 +403,16 @@ int main(int argc, char **argv)
 		// wait 10 millisecond for data on pty file descriptor.
 		retval = poll(&fd_array, 1, 10);
 		// no data or poll() error.
-		if (retval <= 0) {
+		if (retval <= 0)
+		{
 			continue;
 		}
-		count = read(sockfd, &key, 1);
-		if (count == 1) {
-			guint32 ch = keyboard_map[key];
 
-			//fprintf(stderr, "key = %d\n", key);
+		count = read(sockfd, &key, 1);
+		if (count == 1)
+		{
+			guint32 ch = keyboard_map[key];
+			//printf("%d\n", key);
 			vterm_write_pipe(vterm, ch);
 		}
 	}

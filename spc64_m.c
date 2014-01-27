@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 /*
-This code is based on the vshell.c from the libvterm library
+This library is based on the vshell.c from the libvterm library
 */
 
 #include <stdio.h>
@@ -32,27 +32,36 @@ This code is based on the vshell.c from the libvterm library
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
+#include <time.h>
 
 #include <vterm.h>
 
 #include <curses.h>
 
 static unsigned char display[6144];
+static unsigned char display2[6144];
+
+static unsigned char bufor[6144 * 3];
 static unsigned char font[2048];
 
-static WINDOW term_win;
-static int to_refresh = 1;
+static unsigned char *changes;
 
-chtype acs_map[128];
+static WINDOW term_win;
+static unsigned int to_refresh = 1;
 
 static guint32 keyboard_map[256];
+chtype acs_map[128];
 
+#ifndef MAX_X
 #define MAX_X 64
+#endif
+
 #define MAX_Y 24
 
 bool
 has_colors(void)
 {
+	//fprintf(stderr, "has_colors\n");
 	return FALSE;
 }
 
@@ -67,98 +76,53 @@ waddch(WINDOW *win, const chtype a)
 	unsigned char z[8];
 	int which = (x & 1);
 
-	if (win->_attrs & A_REVERSE) {
-		for (i = 0; i < 8; i++) {
+	if (win->_attrs & A_REVERSE)
+	{
+		for (i = 0; i < 8; i++)
+		{
 			z[i] = ~font[addres + i];
 		}
-	} else {
-		for (i = 0; i < 8; i++) {
+	}
+	else
+	{
+		for (i = 0; i < 8; i++)
+		{
 			z[i] = font[addres + i];
 		}
 	}
 	x = (x / 2) & 31;
 	pos = (x & 31) + ((y & 7) << 5) + ((y & 24) << 8);
 
-	if (which) {
-		for (i = 0; i < 8; i++) {
+	if (which)
+	{
+		for (i = 0; i < 8; i++)
+		{
 			display[pos] = (display[pos] & 240) | ((z[i] & 240) >> 4);
 			pos += 256;
 		}
-	} else {
-		for (i = 0; i < 8; i++) {
+	}
+	else
+	{
+		for (i = 0; i < 8; i++)
+		{
 			display[pos] = (display[pos] & 15) | (z[i] & 240);
 			pos += 256;
 		}
 	}
 
 	++x1;
-	if (x1 >= MAX_X) {
+	if (x1 >= MAX_X)
+	{
 		x1 = 0;
 		++y;
-		if (y == MAX_Y) {
+		if (y == MAX_Y)
+		{
 			y = 0;
 		}
 	}
 	win->_curx = x1;
 	win->_cury = y;
 	return 0;
-}
-
-static void
-init_acs(void)
-{
-	int i;
-
-	for (i = 0; i < 128; i++) {
-		acs_map[i] = 32;
-	}
-
-/** Mapping from (enum ::border_char - 0xB0) to VT100 line-drawing
- * characters encoded in CP437.
- * When UTF-8 I/O is enabled, ELinks uses this array instead of
- * ::frame_vt100[], and converts the characters from CP437 to UTF-8.  */
-/*
-static const unsigned char frame_vt100_u[48] = {
-        177, 177, 177, 179, 180, 180, 180, 191,
-        191, 180, 179, 191, 217, 217, 217, 191,
-        192, 193, 194, 195, 196, 197, 195, 195,
-        192, 218, 193, 194, 195, 196, 197, 193,
-        193, 194, 194, 192, 192, 218, 218, 197,
-        197, 217, 218, 177,  32, 32,  32,  32
-};
-*/
-	acs_map['a'] = 177;
-	acs_map['x'] = 179;
-	acs_map['u'] = 180;
-	acs_map['k'] = 191;
-	acs_map['j'] = 217;
-	acs_map['m'] = 192;
-	acs_map['v'] = 193;
-	acs_map['n'] = 197;
-	acs_map['l'] = 218;
-	acs_map['t'] = 195;
-	acs_map['w'] = 194;
-	acs_map['q'] = 196;
-
-}
-
-static void
-init_keyboard(void)
-{
-	guint32 i;
-
-	for (i = 0; i < 256; i++) {
-		keyboard_map[i] = i;
-	}
-
-	keyboard_map[13] = 10; // ENTER
-	keyboard_map[12] = 127; // BACKSPACE
-	keyboard_map[7] = 27; // ESC
-	keyboard_map[10] = KEY_DOWN;
-	keyboard_map[11] = KEY_UP;
-	keyboard_map[8] = KEY_LEFT;
-	keyboard_map[9] = KEY_RIGHT;
-	keyboard_map[130] = 9;
 }
 
 int
@@ -182,78 +146,135 @@ wchgat(WINDOW *win, int n, attr_t attr, short color, const void *opts)
 int
 beep(void)
 {
+	//fprintf(stderr, "beep\n");
 	return 0;
 }
 
-int COLOR_PAIRS = 2;
+int
+pair_content(short pair, short *f, short *b)
+{
+	//fprintf(stderr, "pair_content: pair = %d\n", pair);
+	return 0;
+}
+
+int COLOR_PAIRS = 3;
 
 int
 wmove(WINDOW *win, int y, int x)
 {
-	if (y >= 0 && y < MAX_Y) {
+	//fprintf(stderr, "wmove: y=%d, x=%d\n", y, x);
+	if (y >= 0 && y < MAX_Y)
+	{
 		win->_cury = y;
 	}
-	if (x >= 0 && x < MAX_X) {
+	if (x >= 0 && x < MAX_X)
+	{
 		win->_curx = x;
 	}
 	return 0;
+}
+
+static void
+writescr(void)
+{
+	unsigned int i;
+
+	changes = bufor;
+	for (i = 0; i < 6144; ++i)
+	{
+		if (display2[i] != display[i])
+		{
+			*((unsigned short *)changes) = (unsigned short)(i + 16384);
+			changes += 2;
+			*((unsigned char *)changes) = display2[i] = display[i];
+			++changes;
+		}
+	}
 }
 
 static void *
 send_loop(void *arg)
 {
 	int sockfd = *(int *)arg;
-	int counter = 0;
+	static int counter;
 
-	while (TRUE) {
-		if (to_refresh) {
-			struct pollfd fd_array;
+	while (TRUE)
+	{
+		if (to_refresh)
+		{
 			int pos, to_write;
 
-			fd_array.fd = sockfd;
-			fd_array.events = POLLOUT;
+			to_refresh = 0;
+			writescr();
 
-			to_refresh = counter = 0;
+			for (pos = 0, to_write = (unsigned char *)changes - bufor; to_write;)
+			{
+				int sent = write(sockfd, bufor + pos, to_write);
 
-			for (pos = 0, to_write = 1024;;) {
-				int retval = poll(&fd_array, 1, 10);
-				int sent;
-				// no data or poll() error.
-				if (retval <= 0) {
-					continue;
-				}
-
-				sent = write(sockfd, display + pos, to_write);
-
-				if (sent < 0) {
-					continue;
+				if (sent < 0)
+				{
+					fprintf(stderr, "sent = %d\n",sent);
+					break;
 				};
 				pos += sent;
-				if (pos >= 6144) {
-					break;
-				}
-				to_write = (6144 - pos) > 1024 ? 1024 : (6144 - pos);
+				to_write -= sent;
 			}
-		} else {
+		}
+		else
+		{
 			static struct timespec t = {
 				.tv_sec = 0,
 				.tv_nsec = 10000000
 			};
 			nanosleep(&t, NULL);
-			++counter;
-			if (counter == 20) {
-				to_refresh = 1;
-			}
 		}
 	}
 }
 
-int
-pair_content(short pair, short *f, short *b)
+static void
+init_acs(void)
 {
-	return 0;
+	int i;
+
+	for (i = 0; i < 128; i++)
+	{
+		acs_map[i] = 32;
+	}
+
+	acs_map['a'] = 177;
+	acs_map['x'] = 179;
+	acs_map['u'] = 180;
+	acs_map['k'] = 191;
+	acs_map['j'] = 217;
+	acs_map['m'] = 192;
+	acs_map['v'] = 193;
+	acs_map['n'] = 197;
+	acs_map['l'] = 218;
+	acs_map['t'] = 195;
+	acs_map['w'] = 194;
+	acs_map['q'] = 196;
+
 }
 
+static void
+init_keyboard(void)
+{
+	guint32 i;
+
+	for (i = 0; i < 256; i++)
+	{
+		keyboard_map[i] = i;
+	}
+
+	keyboard_map[13] = 10; // ENTER
+	keyboard_map[12] = 127; // BACKSPACE
+	keyboard_map[7] = 27; // ESC
+	keyboard_map[10] = KEY_DOWN;
+	keyboard_map[11] = KEY_UP;
+	keyboard_map[8] = KEY_LEFT;
+	keyboard_map[9] = KEY_RIGHT;
+	keyboard_map[130] = 9;
+}
 
 int
 main(int argc, char **argv)
@@ -267,28 +288,33 @@ main(int argc, char **argv)
 	struct hostent *he;
 	int sockfd, sent;
 	pthread_t fred;
+	unsigned char key;
 
-	if (argc < 2) {
+	if (argc < 2)
+	{
 		printf("Need a host as the arg\n");
 		exit(255);
 	}
 
 	he = gethostbyname(argv[1]);
-	if (!he) {
+	if (!he)
+	{
 		perror("gethostbyname");
 		exit(255);
 	}
 
 	stream = fopen("FONT4.BIN", "rb");
-	if (!stream) {
+	if (!stream)
+	{
 		perror("fopen");
 		exit(255);
 	}
-	fread(&font, 1, 2048, stream);
+	fread(font, 1, 2048, stream);
 	fclose(stream);
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
+	if (sockfd < 0)
+	{
 		perror("socket");
 		exit(255);
 	}
@@ -298,18 +324,21 @@ main(int argc, char **argv)
 	remoteaddr.sin_family = AF_INET;
 	remoteaddr.sin_port = htons(2000);
 	memcpy(&(remoteaddr.sin_addr), he->h_addr, he->h_length);
-	if(connect(sockfd, (struct sockaddr *)&remoteaddr, sizeof(remoteaddr)) < 0) {
+	if (connect(sockfd, (struct sockaddr *)&remoteaddr, sizeof(remoteaddr)) < 0)
+	{
 		perror("connect");
 		exit(255);
 	}
 
-	fcntl(sockfd, F_SETFL, O_NONBLOCK);
+	//fcntl(sockfd, F_SETFL, O_NONBLOCK);
 	init_acs();
 	init_keyboard();
+
 	locale = setlocale(LC_ALL,"C");
+	term_win._use_keypad = TRUE;
 
 	/* create the terminal and have it run bash */
-	vterm = vterm_create(MAX_X, MAX_Y, VTERM_FLAG_VT100);
+	vterm = vterm_create(MAX_X, 24, VTERM_FLAG_VT100);
 	vterm_set_colors(vterm, COLOR_WHITE, COLOR_BLACK);
 	vterm_wnd_set(vterm, &term_win);
 
@@ -319,15 +348,16 @@ main(int argc, char **argv)
 
 	pthread_create(&fred, NULL, send_loop, &sockfd);
 
-	while (TRUE) {
+	while (TRUE)
+	{
 		struct pollfd fd_array;
 		int count, retval;
 		int bytes = vterm_read_pipe(vterm);
-		unsigned char key;
 
-		if (bytes > 0) {
+		if (bytes > 0)
+		{
 			vterm_wnd_update(vterm);
-			++to_refresh;
+			to_refresh = 1;
 		}
 		if (bytes == -1) break;
 
@@ -336,14 +366,16 @@ main(int argc, char **argv)
 		// wait 10 millisecond for data on pty file descriptor.
 		retval = poll(&fd_array, 1, 10);
 		// no data or poll() error.
-		if (retval <= 0) {
+		if (retval <= 0)
+		{
 			continue;
 		}
-		count = read(sockfd, &key, 1);
-		if (count == 1) {
-			guint32 ch = keyboard_map[key];
 
-			//fprintf(stderr, "key = %d\n", key);
+		count = read(sockfd, &key, 1);
+		if (count == 1)
+		{
+			guint32 ch = keyboard_map[key];
+			//printf("%d\n", key);
 			vterm_write_pipe(vterm, ch);
 		}
 	}
