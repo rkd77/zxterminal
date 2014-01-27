@@ -10,8 +10,8 @@ There are 5 variants of the terminal:
 - 85x24 hires (timex.tap and tmx85)
 - 80x24 hires (timex.tap and tmx80)
 - 64x24 hires (timex.tap and tmx64)
-- 64x24 color for ZX Spectrum (spectrum_c.tap and spc64_c)
-- 64x24 mono for ZX Spectrum (spectrum_m.c and spc64_m)
+- 64x24 color for ZX Spectrum (spectrum.tap and spc64_c)
+- 64x24 mono for ZX Spectrum (spectrum.c and spc64_m)
 
 To build, type make.
 
