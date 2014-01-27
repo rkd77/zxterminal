@@ -1,0 +1,8 @@
+spc64_c
+spc64_m
+tmx64
+tmx80
+tmx85
+*.def
+*.bin
+*.tap
